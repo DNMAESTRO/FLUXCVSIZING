@@ -158,25 +158,40 @@
 <body>
 
 <div class="calculator-container">
-    <h2>FLUXCV Regulating Valve Calculator</h2>
+    <h2>FLUXCV Valve Sizing Calculator</h2>
     <div class="brand-sub">A Technology Brand by MAESTRO ASIA PTE LTD</div>
 
     <div class="form-group">
         <label for="diameter">Nominal Diameter (mm):</label>
         <select id="diameter" onchange="updateValveDropdowns()">
-            </select>
+            <option value='G3/4"'>G3/4"</option>
+            <option value="20">20</option>
+            <option value="25">25</option>
+            <option value="32">32</option>
+            <option value="40">40</option>
+            <option value="50">50</option>
+            <option value="65">65</option>
+            <option value="80">80</option>
+            <option value="100" selected>100</option>
+            <option value="125">125</option>
+            <option value="150">150</option>
+            <option value="200">200</option>
+        </select>
     </div>
 
     <div class="form-group">
         <label for="kvs">Rated Flow Coefficient (Kvs):</label>
         <select id="kvs">
-            </select>
+            <option value="120">120</option>
+        </select>
     </div>
 
     <div class="form-group">
         <label for="characteristic">Flow Characteristic:</label>
         <select id="characteristic">
-            </select>
+            <option value="Straight line">Straight line</option>
+            <option value="Equal percentage" selected>Equal percentage</option>
+        </select>
     </div>
 
     <div class="section-title">Target Calculation optimization</div>
@@ -225,7 +240,6 @@
 </div>
 
 <script>
-    // --- SPECIFICATION MATRIX STORAGE ---
     const VALVE_DATABASE = {
         'G3/4"':  { kvs: [0.08, 0.12, 0.2, 0.32, 0.5, 0.8], stroke: 10, char: ["Straight line"] },
         "20":     { kvs: [1.2, 2.0, 3.2, 5.0],           stroke: 10, char: ["Straight line", "Equal percentage"] },
@@ -241,20 +255,7 @@
         "200":    { kvs: [450.0],                         stroke: 60, char: ["Straight line", "Equal percentage"] }
     };
 
-    const TURNDOWN_RATIO = 30.0; // Inherent turndown ratio R = 30:1
-
-    // Initialize UI Layout drops
-    function init() {
-        const diameterSelect = document.getElementById('diameter');
-        diameterSelect.innerHTML = '';
-        for (let dia in VALVE_DATABASE) {
-            let option = document.createElement('option');
-            option.value = dia;
-            option.textContent = dia;
-            diameterSelect.appendChild(option);
-        }
-        updateValveDropdowns();
-    }
+    const TURNDOWN_RATIO = 30.0;
 
     function updateValveDropdowns() {
         const dia = document.getElementById('diameter').value;
@@ -268,7 +269,7 @@
             opt.textContent = val;
             kvsSelect.appendChild(opt);
         });
-        kvsSelect.value = data.kvs[data.kvs.length - 1]; // Select max capacity default
+        kvsSelect.value = data.kvs[data.kvs.length - 1];
 
         const charSelect = document.getElementById('characteristic');
         charSelect.innerHTML = '';
@@ -306,7 +307,6 @@
         warningBox.style.display = 'none';
         warningBox.textContent = '';
 
-        // Pull Form Config
         const sg = parseFloat(document.getElementById('sg').value);
         const kvs = parseFloat(document.getElementById('kvs').value);
         const charType = document.getElementById('characteristic').value;
@@ -315,32 +315,24 @@
         const mode = document.querySelector('input[name="calcMode"]:checked').value;
 
         if (isNaN(sg) || sg <= 0) {
-            alert("Specific Gravity must be a positive numeric metric value.");
+            alert("Specific Gravity must be a positive value.");
             return;
         }
 
-        // --- CALCULATION LOGIC BRANCHES ---
         if (mode === "Flow") {
             const dp = parseFloat(document.getElementById('dp').value);
             const opening = parseFloat(document.getElementById('opening').value);
 
             if (isNaN(dp) || dp < 0 || isNaN(opening) || opening < 0 || opening > 100) {
-                alert("Please complete valid inputs for dP (>=0) and Opening (0-100%).");
+                alert("Please provide valid inputs for dP (>=0) and Opening (0-100%).");
                 return;
             }
 
             let x = opening / 100.0;
-            let kv = 0;
-            if (charType === "Straight line") {
-                kv = kvs * x;
-            } else { // Equal Percentage
-                kv = x > 0 ? kvs * Math.pow(TURNDOWN_RATIO, (x - 1.0)) : 0;
-            }
-
+            let kv = charType === "Straight line" ? kvs * x : (x > 0 ? kvs * Math.pow(TURNDOWN_RATIO, (x - 1.0)) : 0);
             let flow = kv * Math.sqrt(dp / sg);
-            let activeStroke = x * maxStroke;
 
-            displayResults(flow, dp, opening, activeStroke);
+            displayResults(flow, dp, opening, x * maxStroke);
 
         } else if (mode === "Opening") {
             const flow = parseFloat(document.getElementById('flow').value);
@@ -355,6 +347,10 @@
 
             if (requiredKv > kvs) {
                 displayResults("OVERSIZED REQUIRED", dp, "OVERSIZED REQUIRED", "OVERSIZED REQUIRED");
-                warningBox.textContent = `⚠️ ALERT: Target parameters demand an operational Kv of ${requiredKv.toFixed(2)}, exceeding this valve's peak capacity (Max Kvs ${kvs}). Switch to a wider layout size.`;
+                warningBox.textContent = `⚠️ ALERT: Required Kv (${requiredKv.toFixed(2)}) exceeds this valve's capacity (Max Kvs ${kvs}). Select a larger Nominal Diameter.`;
                 warningBox.style.display = 'block';
-                return
+                return;
+            }
+
+            let x = charType === "Straight line" ? requiredKv / kvs : (requiredKv <= 0 ? 0 : 1.0 + (Math.log(requiredKv / kvs) / Math.log(TURNDOWN_RATIO)));
+            let opening = Math.max(0.0, Math.min(100.0, x * 100.0));
