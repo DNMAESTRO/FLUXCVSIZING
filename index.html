@@ -1,0 +1,268 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+import math
+
+# --- DATABASE FROM THE TECHNICAL SPECIFICATION SHEET ---
+# Maps Nominal Diameter (mm) to its available Rated Kv (Kvs) values and Stroke (mm)
+VALVE_DATABASE = {
+    'G3/4"':  {"kvs_list": [0.08, 0.12, 0.2, 0.32, 0.5, 0.8], "stroke": 10, "char": ["Straight line"]},
+    "20":     {"kvs_list": [1.2, 2.0, 3.2, 5.0],           "stroke": 10, "char": ["Straight line", "Equal percentage"]},
+    "25":     {"kvs_list": [8.0],                           "stroke": 10, "char": ["Straight line", "Equal percentage"]},
+    "32":     {"kvs_list": [12.0],                          "stroke": 16, "char": ["Straight line", "Equal percentage"]},
+    "40":     {"kvs_list": [20.0],                          "stroke": 16, "char": ["Straight line", "Equal percentage"]},
+    "50":     {"kvs_list": [32.0],                          "stroke": 25, "char": ["Straight line", "Equal percentage"]},
+    "65":     {"kvs_list": [50.0],                          "stroke": 25, "char": ["Straight line", "Equal percentage"]},
+    "80":     {"kvs_list": [80.0],                          "stroke": 25, "char": ["Straight line", "Equal percentage"]},
+    "100":    {"kvs_list": [120.0],                         "stroke": 40, "char": ["Straight line", "Equal percentage"]},
+    "125":    {"kvs_list": [200.0],                         "stroke": 40, "char": ["Straight line", "Equal percentage"]},
+    "150":    {"kvs_list": [280.0],                         "stroke": 40, "char": ["Straight line", "Equal percentage"]},
+    "200":    {"kvs_list": [450.0],                         "stroke": 60, "char": ["Straight line", "Equal percentage"]}
+}
+
+TURNDOWN_RATIO = 30.0  # Inherent turndown ratio R = 30:1
+
+class ValveCalculatorApp(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("FLUXCV Valve Sizing Calculator")
+        self.geometry("520x650")
+        self.resizable(False, False)
+        
+        # Style configurations
+        self.style = ttk.Style(self)
+        self.style.theme_use('clam')
+        
+        self.create_widgets()
+        self.on_diameter_change()
+
+    def create_widgets(self):
+        # Title Header
+        header = ttk.Label(self, text="FLUXCV Regulating Valve Calculator", font=("Arial", 14, "bold"), foreground="#003366")
+        header.pack(pady=15)
+        
+        # ---------------- INPUT FRAMES ----------------
+        main_frame = ttk.LabelFrame(self, text=" Configuration & Inputs ", padding=15)
+        main_frame.pack(fill="x", padx=20, pady=5)
+        
+        # 1. Nominal Diameter
+        ttk.Label(main_frame, text="Nominal Diameter (mm):").grid(row=0, column=0, sticky="w", pady=5)
+        self.combo_diameter = ttk.Combobox(main_frame, values=list(VALVE_DATABASE.keys()), state="readonly", width=22)
+        self.combo_diameter.set('G3/4"')
+        self.combo_diameter.grid(row=0, column=1, pady=5)
+        self.combo_diameter.bind("<<ComboboxSelected>>", self.on_diameter_change)
+        
+        # 2. Rated Kvs
+        ttk.Label(main_frame, text="Rated Flow Coeff. (Kvs):").grid(row=1, column=0, sticky="w", pady=5)
+        self.combo_kvs = ttk.Combobox(main_frame, state="readonly", width=22)
+        self.combo_kvs.grid(row=1, column=1, pady=5)
+        
+        # 3. Flow Characteristics
+        ttk.Label(main_frame, text="Flow Characteristic:").grid(row=2, column=0, sticky="w", pady=5)
+        self.combo_char = ttk.Combobox(main_frame, state="readonly", width=22)
+        self.combo_char.grid(row=2, column=1, pady=5)
+        
+        # Separator line
+        ttk.Separator(main_frame, orient='horizontal').grid(row=3, column=0, columnspan=2, sticky='ew', pady=10)
+        
+        # 4. Mode Selection (What to solve for)
+        ttk.Label(main_frame, text="Target Calculation:", font=("Arial", 10, "bold")).grid(row=4, column=0, sticky="w", pady=5)
+        self.calc_mode = tk.StringVar(value="Flow")
+        modes_frame = ttk.Frame(main_frame)
+        modes_frame.grid(row=4, column=1, sticky="w")
+        
+        ttk.Radiobutton(modes_frame, text="Flow Rate", variable=self.calc_mode, value="Flow", command=self.toggle_inputs).pack(side="left", padx=2)
+        ttk.Radiobutton(modes_frame, text="Opening %", variable=self.calc_mode, value="Opening", command=self.toggle_inputs).pack(side="left", padx=2)
+        ttk.Radiobutton(modes_frame, text="Pressure Drop", variable=self.calc_mode, value="Pressure", command=self.toggle_inputs).pack(side="left", padx=2)
+
+        # Separator line
+        ttk.Separator(main_frame, orient='horizontal').grid(row=5, column=0, columnspan=2, sticky='ew', pady=10)
+
+        # Process Variables Input
+        ttk.Label(main_frame, text="Fluid Specific Gravity (SG):").grid(row=6, column=0, sticky="w", pady=5)
+        self.entry_sg = ttk.Entry(main_frame, width=24)
+        self.entry_sg.insert(0, "1.0")  # Default to water
+        self.entry_sg.grid(row=6, column=1, pady=5)
+
+        ttk.Label(main_frame, text="Flow Rate (m³/h):").grid(row=7, column=0, sticky="w", pady=5)
+        self.entry_flow = ttk.Entry(main_frame, width=24)
+        self.entry_flow.grid(row=7, column=1, pady=5)
+        
+        ttk.Label(main_frame, text="Pressure Drop ΔP (bar):").grid(row=8, column=0, sticky="w", pady=5)
+        self.entry_dp = ttk.Entry(main_frame, width=24)
+        self.entry_dp.grid(row=8, column=1, pady=5)
+        
+        ttk.Label(main_frame, text="Actuator Opening (%):").grid(row=9, column=0, sticky="w", pady=5)
+        self.entry_open = ttk.Entry(main_frame, width=24)
+        self.entry_open.grid(row=9, column=1, pady=5)
+
+        # Calculate Button
+        self.btn_calc = tk.Button(self, text="Calculate Valve Metrics", bg="#003366", fg="white", font=("Arial", 11, "bold"), command=self.perform_calculation)
+        self.btn_calc.pack(pady=15, fill="x", padx=20)
+
+        # ---------------- OUTPUT FRAMES ----------------
+        self.out_frame = ttk.LabelFrame(self, text=" Execution & Calculation Summary ", padding=15)
+        self.out_frame.pack(fill="both", expand=True, padx=20, pady=5)
+        
+        self.lbl_res_flow = ttk.Label(self.out_frame, text="Calculated Flow Rate: --", font=("Arial", 10))
+        self.lbl_res_flow.pack(anchor="w", pady=2)
+        
+        self.lbl_res_dp = ttk.Label(self.out_frame, text="Calculated Pressure Drop: --", font=("Arial", 10))
+        self.lbl_res_dp.pack(anchor="w", pady=2)
+        
+        self.lbl_res_open = ttk.Label(self.out_frame, text="Calculated Actuator Opening: --", font=("Arial", 10))
+        self.lbl_res_open.pack(anchor="w", pady=2)
+        
+        self.lbl_res_stroke = ttk.Label(self.out_frame, text="Physical Actuator Stem Travel: --", font=("Arial", 10))
+        self.lbl_res_stroke.pack(anchor="w", pady=2)
+        
+        # Warning/Context area
+        self.lbl_warning = ttk.Label(self.out_frame, text="", foreground="darkorange", font=("Arial", 9, "italic"), wraplength=440)
+        self.lbl_warning.pack(anchor="w", pady=8)
+
+    def on_diameter_change(self, event=None):
+        diameter = self.combo_diameter.get()
+        data = VALVE_DATABASE[diameter]
+        
+        # Update Kvs options
+        self.combo_kvs['values'] = data["kvs_list"]
+        self.combo_kvs.set(data["kvs_list"][-1]) # default to max available
+        
+        # Update characteristic rules
+        self.combo_char['values'] = data["char"]
+        self.combo_char.set(data["char"][0])
+        
+        self.toggle_inputs()
+
+    def toggle_inputs(self):
+        mode = self.calc_mode.get()
+        
+        # Reset states
+        self.entry_flow.config(state="normal")
+        self.entry_dp.config(state="normal")
+        self.entry_open.config(state="normal")
+        
+        # Disable entry depending on target optimization
+        if mode == "Flow":
+            self.entry_flow.delete(0, tk.END)
+            self.entry_flow.config(state="disabled")
+        elif mode == "Opening":
+            self.entry_open.delete(0, tk.END)
+            self.entry_open.config(state="disabled")
+        elif mode == "Pressure":
+            self.entry_dp.delete(0, tk.END)
+            self.entry_dp.config(state="disabled")
+
+    def perform_calculation(self):
+        try:
+            # Parse Baseline Inputs
+            sg = float(self.entry_sg.get())
+            kvs = float(self.combo_kvs.get())
+            char_type = self.combo_char.get()
+            diameter = self.combo_diameter.get()
+            max_stroke = VALVE_DATABASE[diameter]["stroke"]
+            
+            mode = self.calc_mode.get()
+            self.lbl_warning.config(text="") # Clear warnings
+
+            if sg <= 0:
+                raise ValueError("Specific Gravity must be greater than 0.")
+
+            # --- OPTION 1: SOLVING FOR FLOW RATE ---
+            if mode == "Flow":
+                dp = float(self.entry_dp.get())
+                opening = float(self.entry_open.get())
+                
+                if dp < 0 or opening < 0 or opening > 100:
+                    raise ValueError("Ensure Pressure Drop >= 0 and Opening is between 0% and 100%.")
+                
+                x = opening / 100.0
+                # Compute operating Kv based on curve characteristic profiles
+                if char_type == "Straight line":
+                    kv = kvs * x
+                else:  # Equal Percentage
+                    kv = kvs * (TURNDOWN_RATIO ** (x - 1.0)) if x > 0 else 0
+                
+                flow = kv * math.sqrt(dp / sg) if dp > 0 else 0
+                stroke_pct = (opening / 100.0) * max_stroke
+                
+                self.update_results_ui(flow, dp, opening, stroke_pct)
+
+            # --- OPTION 2: SOLVING FOR ACTUATOR OPENING PERCENTAGE ---
+            elif mode == "Opening":
+                flow = float(self.entry_flow.get())
+                dp = float(self.entry_dp.get())
+                
+                if flow <= 0 or dp <= 0:
+                    raise ValueError("Flow rate and Pressure Drop must be greater than 0 to find stem positioning.")
+                
+                required_kv = flow / math.sqrt(dp / sg)
+                
+                if required_kv > kvs:
+                    self.update_results_ui(flow, dp, "OVERSIZED REQUIRED", "OVERSIZED REQUIRED")
+                    self.lbl_warning.config(text=f"⚠️ WARNING: Target profile requires an operating Kv of {required_kv:.2f}, which exceeds this valve's capacity (Max Kvs {kvs}). Select a larger Nominal Diameter.")
+                    return
+                
+                # Invert flow characterizations to isolate opening factor x
+                if char_type == "Straight line":
+                    x = required_kv / kvs
+                else:  # Equal Percentage
+                    # Equation: kv = kvs * (30^(x-1)) => log(kv/kvs) = (x-1)*log(30)
+                    if required_kv <= 0:
+                        x = 0
+                    else:
+                        x = 1.0 + (math.log(required_kv / kvs) / math.log(TURNDOWN_RATIO))
+                
+                opening = max(0.0, min(100.0, x * 100.0))
+                stroke_pct = (opening / 100.0) * max_stroke
+                
+                # Performance dead zone check (from standard page indicators)
+                if opening < (100.0 / TURNDOWN_RATIO):
+                    self.lbl_warning.config(text="⚠️ CAUTION: Calculated position drops beneath the stable 30:1 structural turndown boundary. Flow control reliability may degrade.")
+                
+                self.update_results_ui(flow, dp, opening, stroke_pct)
+
+            # --- OPTION 3: SOLVING FOR PRESSURE DROP ---
+            elif mode == "Pressure":
+                flow = float(self.entry_flow.get())
+                opening = float(self.entry_open.get())
+                
+                if flow < 0 or opening <= 0 or opening > 100:
+                    raise ValueError("Ensure Flow >= 0 and Actuator Opening is within 1% to 100%.")
+                
+                x = opening / 100.0
+                if char_type == "Straight line":
+                    kv = kvs * x
+                else:
+                    kv = kvs * (TURNDOWN_RATIO ** (x - 1.0))
+                
+                if kv == 0:
+                    raise ValueError("Valve is closed; cannot compute finite pressure relief flow conditions.")
+                
+                dp = sg * ((flow / kv) ** 2)
+                stroke_pct = (opening / 100.0) * max_stroke
+                
+                self.update_results_ui(flow, dp, opening, stroke_pct)
+
+        except ValueError as err:
+            messagebox.showerror("Input Error", f"Invalid entry values:\n{err}")
+
+    def update_results_ui(self, flow, dp, opening, stroke):
+        # Format flow numeric data
+        if isinstance(flow, float): self.lbl_res_flow.config(text=f"Calculated Flow Rate: {flow:.3f} m³/h")
+        else: self.lbl_res_flow.config(text=f"Calculated Flow Rate: {flow}")
+        
+        # Format pressure delta
+        if isinstance(dp, float): self.lbl_res_dp.config(text=f"Calculated Pressure Drop: {dp:.3f} bar")
+        else: self.lbl_res_dp.config(text=f"Calculated Pressure Drop: {dp}")
+        
+        # Format Opening %
+        if isinstance(opening, float): self.lbl_res_open.config(text=f"Calculated Actuator Opening: {opening:.1f} %")
+        else: self.lbl_res_open.config(text=f"Calculated Actuator Opening: {opening}")
+        
+        # Format Stem Stroke
+        if isinstance(stroke, float): self.lbl_res_stroke.config(text=f"Physical Actuator Stem Travel: {stroke:.2f} mm")
+        else: self.lbl_res_stroke.config(text=f"Physical Actuator Stem Travel: {stroke}")
+
+if __name__ == "__main__":
+    app = ValveCalculatorApp()
+    app.mainloop()
