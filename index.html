@@ -3,12 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FLUXCV Valve Sizing Calculator</title>
+    <title>FLUXCV Valve Sizing & Branch Verification</title>
     <style>
         :root {
             --primary-color: #003366;
             --secondary-color: #f4f7f6;
             --accent-color: #e67e22;
+            --success-color: #27ae60;
+            --danger-color: #c0392b;
             --text-color: #333;
             --border-color: #ddd;
         }
@@ -26,7 +28,7 @@
         .calculator-container {
             background-color: #ffffff;
             width: 100%;
-            max-width: 550px;
+            max-width: 600px;
             padding: 30px;
             border-radius: 8px;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
@@ -54,14 +56,26 @@
         .section-title {
             font-weight: bold;
             color: var(--primary-color);
-            margin: 15px 0 10px 0;
+            margin: 20px 0 10px 0;
             font-size: 15px;
+            border-left: 3px solid var(--accent-color);
+            padding-left: 8px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
         }
 
         .form-group {
             margin-bottom: 15px;
             display: flex;
             flex-direction: column;
+        }
+
+        .full-width {
+            grid-column: span 2;
         }
 
         label {
@@ -83,28 +97,6 @@
             border-color: var(--primary-color);
         }
 
-        .radio-group {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 15px;
-            background: var(--secondary-color);
-            padding: 10px;
-            border-radius: 4px;
-        }
-
-        .radio-option {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            font-size: 13px;
-            cursor: pointer;
-        }
-
-        input[type="radio"] {
-            margin: 0;
-            cursor: pointer;
-        }
-
         button {
             width: 100%;
             padding: 12px;
@@ -116,7 +108,7 @@
             font-weight: bold;
             cursor: pointer;
             transition: background 0.2s;
-            margin-top: 10px;
+            margin-top: 15px;
         }
 
         button:hover {
@@ -134,6 +126,8 @@
         .result-item {
             font-size: 14px;
             margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
         }
 
         .result-item span {
@@ -141,101 +135,98 @@
             color: #000;
         }
 
-        .warning-box {
-            color: var(--accent-color);
-            font-size: 12px;
-            font-style: italic;
-            margin-top: 10px;
+        .status-badge {
+            display: block;
+            text-align: center;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-top: 15px;
+            font-size: 15px;
             display: none;
         }
 
-        input:disabled, select:disabled {
-            background-color: #e9ecef;
-            cursor: not-allowed;
-        }
+        .status-ok { background-color: #d4edda; color: var(--success-color); }
+        .status-warn { background-color: #fff3cd; color: #856404; }
+        .status-fail { background-color: #f8d7da; color: var(--danger-color); }
     </style>
 </head>
 <body>
 
 <div class="calculator-container">
-    <h2>FLUXCV Valve Sizing Calculator</h2>
+    <h2>FLUXCV Valve Verification Tool</h2>
     <div class="brand-sub">A Technology Brand by MAESTRO ASIA PTE LTD</div>
 
-    <div class="form-group">
-        <label for="diameter">Nominal Diameter (mm):</label>
-        <select id="diameter" onchange="updateValveDropdowns()">
-            <option value='G3/4"'>G3/4"</option>
-            <option value="20">20</option>
-            <option value="25">25</option>
-            <option value="32">32</option>
-            <option value="40">40</option>
-            <option value="50">50</option>
-            <option value="65">65</option>
-            <option value="80">80</option>
-            <option value="100" selected>100</option>
-            <option value="125">125</option>
-            <option value="150">150</option>
-            <option value="200">200</option>
-        </select>
+    <div class="section-title">1. Selected Valve Hardware Specifications</div>
+    <div class="form-grid">
+        <div class="form-group">
+            <label for="diameter">Nominal Diameter (mm):</label>
+            <select id="diameter" onchange="updateValveDropdowns()">
+                <option value='G3/4"'>G3/4"</option>
+                <option value="20">20</option>
+                <option value="25">25</option>
+                <option value="32">32</option>
+                <option value="40">40</option>
+                <option value="50">50</option>
+                <option value="65">65</option>
+                <option value="80">80</option>
+                <option value="100" selected>100</option>
+                <option value="125">125</option>
+                <option value="150">150</option>
+                <option value="200">200</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="kvs">Rated Flow Coefficient (Kvs):</label>
+            <select id="kvs"><option value="120">120</option></select>
+        </div>
+
+        <div class="form-group full-width">
+            <label for="characteristic">Flow Characteristic:</label>
+            <select id="characteristic"></select>
+        </div>
     </div>
 
-    <div class="form-group">
-        <label for="kvs">Rated Flow Coefficient (Kvs):</label>
-        <select id="kvs">
-            <option value="120">120</option>
-        </select>
+    <div class="section-title">2. Input Site Branch Conditions</div>
+    <div class="form-grid">
+        <div class="form-group">
+            <label for="flow">Target Flow Rate (m³/h):</label>
+            <input type="number" id="flow" value="40" step="0.1" min="0.01">
+        </div>
+
+        <div class="form-group">
+            <label for="totalDp">Total Available Branch ΔP (bar):</label>
+            <input type="number" id="totalDp" value="1.5" step="0.01" min="0.01">
+        </div>
+
+        <div class="form-group">
+            <label for="pipeLength">Straight Pipe Length at Site (m):</label>
+            <input type="number" id="pipeLength" value="50" step="1" min="0">
+        </div>
+
+        <div class="form-group">
+            <label for="pipeDia">Internal Pipe Diameter (mm):</label>
+            <input type="number" id="pipeDia" value="100" step="1" min="1">
+        </div>
+        
+        <div class="form-group full-width" style="margin-bottom:0;">
+            <label for="sg">Fluid Specific Gravity (SG):</label>
+            <input type="number" id="sg" value="1.0" step="0.01" min="0.01">
+        </div>
     </div>
 
-    <div class="form-group">
-        <label for="characteristic">Flow Characteristic:</label>
-        <select id="characteristic">
-            <option value="Straight line">Straight line</option>
-            <option value="Equal percentage" selected>Equal percentage</option>
-        </select>
-    </div>
-
-    <div class="section-title">Target Calculation optimization</div>
-    <div class="radio-group">
-        <label class="radio-option">
-            <input type="radio" name="calcMode" value="Flow" checked onchange="toggleInputStates()"> Flow Rate
-        </label>
-        <label class="radio-option">
-            <input type="radio" name="calcMode" value="Opening" onchange="toggleInputStates()"> Actuator Opening %
-        </label>
-        <label class="radio-option">
-            <input type="radio" name="calcMode" value="Pressure" onchange="toggleInputStates()"> Pressure Drop
-        </label>
-    </div>
-
-    <div class="form-group">
-        <label for="sg">Fluid Specific Gravity (SG):</label>
-        <input type="number" id="sg" value="1.0" step="0.01" min="0.01">
-    </div>
-
-    <div class="form-group">
-        <label for="flow">Flow Rate (m³/h):</label>
-        <input type="number" id="flow" step="0.1" min="0">
-    </div>
-
-    <div class="form-group">
-        <label for="dp">Pressure Drop ΔP (bar):</label>
-        <input type="number" id="dp" step="0.01" min="0">
-    </div>
-
-    <div class="form-group">
-        <label for="opening">Actuator Opening (%):</label>
-        <input type="number" id="opening" step="1" min="0" max="100">
-    </div>
-
-    <button type="button" onclick="performCalculation()">Calculate Valve Metrics</button>
+    <button type="button" onclick="verifyValveSizing()">Verify Sizing Setup</button>
 
     <div class="results-box">
-        <div class="section-title" style="margin-top: 0;">Output Results Summary</div>
-        <div class="result-item">Calculated Flow Rate: <span id="resFlow">--</span></div>
-        <div class="result-item">Calculated Pressure Drop: <span id="resDp">--</span></div>
-        <div class="result-item">Calculated Actuator Opening: <span id="resOpen">--</span></div>
-        <div class="result-item">Physical Actuator Stem Travel: <span id="resStroke">--</span></div>
-        <div id="warningMsg" class="warning-box"></div>
+        <div class="section-title" style="margin-top: 0; border: none; padding: 0;">Verification Summary</div>
+        <div class="result-item">Estimated Pipe Friction Loss: <span id="outPipeDp">--</span></div>
+        <div class="result-item">Net Pressure Drop Across Valve: <span id="outValveDp">--</span></div>
+        <div class="result-item">Required Operating Kv: <span id="outReqKv">--</span></div>
+        <div class="result-item">Calculated Actuator Opening: <span id="outOpen">--</span></div>
+        <div class="result-item">Physical Actuator Stem Travel: <span id="outStroke">--</span></div>
+        
+        <div id="statusBadge" class="status-badge"></div>
     </div>
 </div>
 
@@ -279,78 +270,100 @@
             opt.textContent = val;
             charSelect.appendChild(opt);
         });
-
-        toggleInputStates();
     }
 
-    function toggleInputStates() {
-        const mode = document.querySelector('input[name="calcMode"]:checked').value;
-        
-        document.getElementById('flow').disabled = false;
-        document.getElementById('dp').disabled = false;
-        document.getElementById('opening').disabled = false;
-
-        if (mode === "Flow") {
-            document.getElementById('flow').disabled = true;
-            document.getElementById('flow').value = '';
-        } else if (mode === "Opening") {
-            document.getElementById('opening').disabled = true;
-            document.getElementById('opening').value = '';
-        } else if (mode === "Pressure") {
-            document.getElementById('dp').disabled = true;
-            document.getElementById('dp').value = '';
-        }
-    }
-
-    function performCalculation() {
-        const warningBox = document.getElementById('warningMsg');
-        warningBox.style.display = 'none';
-        warningBox.textContent = '';
-
+    function verifyValveSizing() {
         const sg = parseFloat(document.getElementById('sg').value);
         const kvs = parseFloat(document.getElementById('kvs').value);
         const charType = document.getElementById('characteristic').value;
         const dia = document.getElementById('diameter').value;
         const maxStroke = VALVE_DATABASE[dia].stroke;
-        const mode = document.querySelector('input[name="calcMode"]:checked').value;
 
-        if (isNaN(sg) || sg <= 0) {
-            alert("Specific Gravity must be a positive value.");
+        const flow = parseFloat(document.getElementById('flow').value);
+        const totalDp = parseFloat(document.getElementById('totalDp').value);
+        const pipeLength = parseFloat(document.getElementById('pipeLength').value);
+        const pipeDia = parseFloat(document.getElementById('pipeDia').value) / 1000.0; // convert mm to meters
+
+        if (isNaN(flow) || flow <= 0 || isNaN(totalDp) || totalDp <= 0) {
+            alert("Please input valid Flow and Branch Pressure values.");
             return;
         }
 
-        if (mode === "Flow") {
-            const dp = parseFloat(document.getElementById('dp').value);
-            const opening = parseFloat(document.getElementById('opening').value);
+        // 1. Calculate Pipe Friction Loss (Hazen-Williams Approximation for clean water setup)
+        // Flow velocity v = Q / A
+        const area = Math.PI * Math.pow(pipeDia, 2) / 4.0;
+        const velocity = (flow / 3600.0) / area; 
+        
+        // Empiric pipe line pressure drop estimation (bar)
+        let pipeDp = 0;
+        if (pipeLength > 0 && pipeDia > 0) {
+            // Darcy-Weisbach simple friction factor approximation (f ≈ 0.02)
+            const headLossMeters = 0.02 * (pipeLength / (pipeDia * 2.0 * 9.81)) * Math.pow(velocity, 2);
+            pipeDp = (headLossMeters * 9.81 * sg * 1000) / 100000.0; // conversion to bar
+        }
 
-            if (isNaN(dp) || dp < 0 || isNaN(opening) || opening < 0 || opening > 100) {
-                alert("Please provide valid inputs for dP (>=0) and Opening (0-100%).");
-                return;
-            }
+        // 2. Compute remaining Net dP available for the Valve
+        let valveDp = totalDp - pipeDp;
+        document.getElementById('outPipeDp').textContent = pipeDp.toFixed(4) + " bar";
 
-            let x = opening / 100.0;
-            let kv = charType === "Straight line" ? kvs * x : (x > 0 ? kvs * Math.pow(TURNDOWN_RATIO, (x - 1.0)) : 0);
-            let flow = kv * Math.sqrt(dp / sg);
+        const badge = document.getElementById('statusBadge');
+        badge.className = 'status-badge';
+        badge.style.display = 'block';
 
-            displayResults(flow, dp, opening, x * maxStroke);
+        if (valveDp <= 0) {
+            document.getElementById('outValveDp').textContent = "INSUFFICIENT PRESSURE";
+            document.getElementById('outReqKv').textContent = "--";
+            document.getElementById('outOpen').textContent = "--";
+            document.getElementById('outStroke').textContent = "--";
+            badge.textContent = "❌ FAIL: Pipe friction layout consumes total branch pressure! Increase diameter or lower flow.";
+            badge.classList.add('status-fail');
+            return;
+        }
+        document.getElementById('outValveDp').textContent = valveDp.toFixed(4) + " bar";
 
-        } else if (mode === "Opening") {
-            const flow = parseFloat(document.getElementById('flow').value);
-            const dp = parseFloat(document.getElementById('dp').value);
+        // 3. Calculate Required Operating Kv
+        let requiredKv = flow / Math.sqrt(valveDp / sg);
+        document.getElementById('outReqKv').textContent = requiredKv.toFixed(2);
 
-            if (isNaN(flow) || flow <= 0 || isNaN(dp) || dp <= 0) {
-                alert("Flow Rate and Pressure drop must be greater than zero.");
-                return;
-            }
+        // 4. Determine Actuator Opening % and analyze bounds
+        if (requiredKv > kvs) {
+            document.getElementById('outOpen').textContent = "OVERSIZED REQUIRED";
+            document.getElementById('outStroke').textContent = "--";
+            badge.textContent = `❌ FAIL: Valve is UNDERSIZED. Required Kv (${requiredKv.toFixed(1)}) exceeds Max Valve Kvs (${kvs}).`;
+            badge.classList.add('status-fail');
+            return;
+        }
 
-            let requiredKv = flow / Math.sqrt(dp / sg);
+        let x = 0;
+        if (charType === "Straight line") {
+            x = requiredKv / kvs;
+        } else { // Equal Percentage
+            x = requiredKv <= 0 ? 0 : 1.0 + (Math.log(requiredKv / kvs) / Math.log(TURNDOWN_RATIO));
+        }
 
-            if (requiredKv > kvs) {
-                displayResults("OVERSIZED REQUIRED", dp, "OVERSIZED REQUIRED", "OVERSIZED REQUIRED");
-                warningBox.textContent = `⚠️ ALERT: Required Kv (${requiredKv.toFixed(2)}) exceeds this valve's capacity (Max Kvs ${kvs}). Select a larger Nominal Diameter.`;
-                warningBox.style.display = 'block';
-                return;
-            }
+        let opening = Math.max(0.0, Math.min(100.0, x * 100.0));
+        let stroke = (opening / 100.0) * maxStroke;
 
-            let x = charType === "Straight line" ? requiredKv / kvs : (requiredKv <= 0 ? 0 : 1.0 + (Math.log(requiredKv / kvs) / Math.log(TURNDOWN_RATIO)));
-            let opening = Math.max(0.0, Math.min(100.0, x * 100.0));
+        document.getElementById('outOpen').textContent = opening.toFixed(1) + " %";
+        document.getElementById('outStroke').textContent = stroke.toFixed(2) + " mm";
+
+        // 5. Evaluate Stability Safety Rules
+        if (opening > 20 && opening < 85) {
+            badge.textContent = "✅ SUCCESS: Valve is perfectly sized. Modulates stably within healthy operating limits (20% - 85%).";
+            badge.classList.add('status-ok');
+        } else if (opening >= 85) {
+            badge.textContent = `⚠️ CAUTION: Valve is tight/close to max capacity (${opening.toFixed(1)}% Open). Minimal headroom left for system surges.`;
+            badge.classList.add('status-warn');
+        } else {
+            badge.textContent = `⚠️ CAUTION: Valve is oversized for this flow (${opening.toFixed(1)}% Open). Operating low near the turndown limit may cause trim wear or cycling.`;
+            badge.classList.add('status-warn');
+        }
+    }
+
+    window.onload = function() {
+        updateValveDropdowns();
+    };
+</script>
+
+</body>
+</html>
