@@ -84,7 +84,7 @@
         }
 
         .flow-input-container select {
-            width: 95px;
+            width: 105px;
             padding: 10px 5px;
         }
 
@@ -207,9 +207,10 @@
         <div class="form-group">
             <label for="flow">Target Flow Rate:</label>
             <div class="flow-input-container">
-                <input type="number" id="flow" value="40" step="0.1" min="0.01">
+                <input type="number" id="flow" value="11" step="0.1" min="0.01">
                 <select id="flowUnit">
-                    <option value="m3h" selected>m³/h</option>
+                    <option value="m3h">m³/h</option>
+                    <option value="lps" selected>L/s (Lps)</option>
                     <option value="lpm">LPM (L/m)</option>
                     <option value="gpm">GPM (US)</option>
                 </select>
@@ -267,7 +268,7 @@
         "200":    { kvs: [450.0],                         stroke: 60, char: ["Straight line", "Equal percentage"] }
     };
 
-    const TURNDOWN_RATIO = 30.0;
+    const TURNDOWN_RATIO = 30.0; // Inherent turndown ratio R from documentation
 
     function updateValveDropdowns() {
         const dia = document.getElementById('diameter').value;
@@ -304,19 +305,21 @@
         const flowUnit = document.getElementById('flowUnit').value;
         const totalDp = parseFloat(document.getElementById('totalDp').value);
         const pipeLength = parseFloat(document.getElementById('pipeLength').value);
-        const pipeDia = parseFloat(document.getElementById('pipeDia').value) / 1000.0; // convert mm to meters
+        const pipeDia = parseFloat(document.getElementById('pipeDia').value) / 1000.0; // mm to m
 
         if (isNaN(inputFlow) || inputFlow <= 0 || isNaN(totalDp) || totalDp <= 0) {
             alert("Please input valid Flow and Branch Pressure values.");
             return;
         }
 
-        // --- DYNAMIC UNIT CONVERSION SCALING RULES TO M3/H ---
-        let flow = inputFlow; // Default m3/h
-        if (flowUnit === "lpm") {
-            flow = inputFlow * 0.06; // 1 LPM = 0.06 m3/h
+        // --- DYNAMIC UNIT CONVERSION MATRIX (SCALING EVERYTHING TO M3/H) ---
+        let flow = inputFlow; 
+        if (flowUnit === "lps") {
+            flow = inputFlow * 3.6;          // 1 L/s = 3.6 m³/h
+        } else if (flowUnit === "lpm") {
+            flow = inputFlow * 0.06;         // 1 LPM = 0.06 m³/h
         } else if (flowUnit === "gpm") {
-            flow = inputFlow * 0.227124; // 1 GPM = 0.227124 m3/h
+            flow = inputFlow * 0.227124;     // 1 GPM = 0.227124 m³/h
         }
 
         // 1. Calculate Pipe Friction Loss
@@ -329,7 +332,7 @@
             pipeDp = (headLossMeters * 9.81 * sg * 1000) / 100000.0; // conversion to bar
         }
 
-        // 2. Compute remaining Net dP available for the Valve
+        // 2. Compute remaining Net dP across Valve
         let valveDp = totalDp - pipeDp;
         document.getElementById('outPipeDp').textContent = pipeDp.toFixed(4) + " bar";
 
